@@ -17,7 +17,7 @@ const FALLBACK_MODELS = [
   { id: 'claude-3-5-haiku-latest', name: 'Claude Haiku 3.5' }
 ]
 
-export default function SettingsDialog({ settings, onClose, onSaved }) {
+export default function SettingsDialog({ settings, onClose, onSaved, toast }) {
   const [provider, setProvider] = useState(settings?.provider || 'anthropic')
   const [apiKey, setApiKey] = useState(settings?.apiKey || '')
   const [model, setModel] = useState(settings?.model || 'claude-sonnet-4-5')
@@ -256,6 +256,29 @@ export default function SettingsDialog({ settings, onClose, onSaved }) {
           <p className="mt-2 text-[11px] text-zinc-600">
             O app verifica novidades ao abrir. Seus e-books nunca sao afetados por atualizacoes.
           </p>
+        </div>
+
+        <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4">
+          <div className="mb-1.5 text-xs font-semibold tracking-widest text-zinc-500 uppercase">Backup local</div>
+          <p className="mb-3 text-[11px] leading-relaxed text-zinc-600">
+            A cada abertura o app guarda uma copia automatica dos seus e-books (ultimas 10 versoes).
+            Voce tambem pode gerar um arquivo .zip para guardar ou levar no pendrive.
+          </p>
+          <div className="flex gap-2">
+            <button
+              className="btn-outline px-3 py-1.5 text-xs"
+              onClick={async () => {
+                const res = await window.api.backupCreate()
+                if (res.ok) toast('Backup salvo em: ' + res.data, 'success')
+                else if (!res.canceled) toast('Erro no backup: ' + res.error, 'error')
+              }}
+            >
+              Backup agora
+            </button>
+            <button className="btn-outline px-3 py-1.5 text-xs" onClick={() => window.api.backupRestore()}>
+              Restaurar backup
+            </button>
+          </div>
         </div>
       </div>
     </Overlay>

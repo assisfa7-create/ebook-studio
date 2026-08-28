@@ -95,6 +95,7 @@ export default function App() {
             setSettings(s)
             toast('Configuracoes salvas.', 'success')
           }}
+          toast={toast}
         />
       )}
 

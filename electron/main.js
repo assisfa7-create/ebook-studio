@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const fsp = fs.promises
+const JSZip = require('jszip')
 const { autoUpdater } = require('electron-updater')
 const { Claude, Ollama, extractJson, extractSvg } = require('./claude')
 const exporter = require('./exporter')
@@ -93,8 +94,25 @@ function createWindow() {
 app.whenReady().then(() => {
   createWindow()
   setupAutoUpdater()
+  autoBackup()
 })
 app.on('window-all-closed', () => app.quit())
+
+const backupsDir = () => path.join(dataDir(), 'backups')
+
+async function autoBackup() {
+  try {
+    const stamp = new Date().toISOString().slice(0, 10)
+    const target = path.join(backupsDir(), stamp)
+    await fsp.mkdir(target, { recursive: true })
+    await fsp.cp(projectsDir(), target, { recursive: true, force: true })
+    const entries = (await fsp.readdir(backupsDir())).sort()
+    while (entries.length > 10) {
+      const old = entries.shift()
+      await fsp.rm(path.join(backupsDir(), old), { recursive: true, force: true })
+    }
+  } catch (_) {}
+}
 
 function setupAutoUpdater() {
   if (!app.isPackaged) return
@@ -290,6 +308,63 @@ ipcMain.handle('gen:cover', async (_e, args) => {
     if (!data.palette) data.palette = []
     data.svg = svg
     return { ok: true, data }
+  } catch (err) {
+    return { ok: false, error: err.message }
+  }
+})
+
+ipcMain.handle('backup:create', async () => {
+  try {
+    const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '') + '-' + new Date().toTimeString().slice(0, 5).replace(':', '')
+    const res = await dialog.showSaveDialog(win, {
+      title: 'Salvar backup',
+      defaultPath: `ebook-studio-backup-${stamp}.zip`,
+      filters: [{ name: 'ZIP', extensions: ['zip'] }]
+    })
+    if (res.canceled || !res.filePath) return { ok: false, canceled: true }
+    const zip = new JSZip()
+    for (const f of await fsp.readdir(projectsDir())) {
+      zip.file('projects/' + f, await fsp.readFile(path.join(projectsDir(), f)))
+    }
+    const buf = await zip.generateAsync({ type: 'nodebuffer' })
+    await fsp.writeFile(res.filePath, buf)
+    return { ok: true, data: res.filePath }
+  } catch (err) {
+    return { ok: false, error: err.message }
+  }
+})
+
+ipcMain.handle('backup:restore', async () => {
+  try {
+    const res = await dialog.showOpenDialog(win, {
+      title: 'Restaurar backup',
+      properties: ['openFile'],
+      filters: [{ name: 'ZIP', extensions: ['zip'] }]
+    })
+    if (res.canceled || !res.filePaths.length) return { ok: false, canceled: true }
+    const buf = await fsp.readFile(res.filePaths[0])
+    const zip = await JSZip.loadAsync(buf)
+    const conf = await dialog.showMessageBox(win, {
+      type: 'question',
+      buttons: ['Substituir', 'Cancelar'],
+      defaultId: 0,
+      cancelId: 1,
+      message: 'Restaurar este backup?',
+      detail: 'Seus e-books atuais serao substituidos pelos do backup. O app sera reiniciado ao finalizar.'
+    })
+    if (conf.response !== 0) return { ok: false, canceled: true }
+    await autoBackup()
+    await fsp.rm(projectsDir(), { recursive: true, force: true })
+    await ensureDirs()
+    for (const name of Object.keys(zip.files)) {
+      if (name.startsWith('projects/') && name.endsWith('.json')) {
+        const content = await zip.files[name].async('nodebuffer')
+        await fsp.writeFile(path.join(projectsDir(), path.basename(name)), content)
+      }
+    }
+    app.relaunch()
+    app.exit(0)
+    return { ok: true }
   } catch (err) {
     return { ok: false, error: err.message }
   }
