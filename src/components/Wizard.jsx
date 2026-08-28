@@ -29,8 +29,9 @@ export default function Wizard({ settings, toast, onClose, onCreated }) {
   const canSubmit = form.topic.trim().length > 3
 
   async function generateOutline() {
-    if (!settings?.apiKey) {
-      toast('Configure sua API key do Claude nas Configuracoes antes de comecar.', 'error')
+    const ready = settings && (settings.provider === 'ollama' ? settings.ollamaModel : settings.apiKey)
+    if (!ready) {
+      toast('Configure o provedor de IA (Claude ou Ollama) nas Configuracoes antes de comecar.', 'error')
       return
     }
     setLoading(true)

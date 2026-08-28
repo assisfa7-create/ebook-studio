@@ -8,8 +8,8 @@ contextBridge.exposeInMainWorld('api', {
   newProject: () => ipcRenderer.invoke('project:new'),
   getSettings: () => ipcRenderer.invoke('settings:get'),
   saveSettings: s => ipcRenderer.invoke('settings:save', s),
-  checkKey: k => ipcRenderer.invoke('key:check', k),
-  listModels: () => ipcRenderer.invoke('models:list'),
+  providerTest: cfg => ipcRenderer.invoke('provider:test', cfg),
+  providerModels: cfg => ipcRenderer.invoke('provider:models', cfg),
   outline: args => ipcRenderer.invoke('gen:outline', args),
   chapter: (reqId, project, chapterIndex) =>
     ipcRenderer.invoke('gen:chapter', { reqId, project, chapterIndex }),

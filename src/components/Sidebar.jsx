@@ -2,7 +2,11 @@ import React from 'react'
 import { BookOpen, Settings, Plus, BookMarked, CircleAlert } from 'lucide-react'
 
 export default function Sidebar({ projects, project, settings, onSelect, onNew, onSettings, onGoHome }) {
-  const noKey = !settings || !settings.apiKey
+  const iaReady = settings && (settings.provider === 'ollama' ? settings.ollamaModel : settings.apiKey)
+  const warningText =
+    settings?.provider === 'ollama'
+      ? { strong: 'Ollama nao configurado', detail: 'Instale um modelo ou troque de provedor.' }
+      : { strong: 'API key nao configurada', detail: 'Clique para configurar o Claude.' }
 
   return (
     <aside className="flex w-64 shrink-0 flex-col border-r border-zinc-800 bg-zinc-900/40">
@@ -47,16 +51,16 @@ export default function Sidebar({ projects, project, settings, onSelect, onNew, 
         ))}
       </nav>
 
-      {noKey && (
+      {!iaReady && (
         <button
           onClick={onSettings}
           className="mx-3 mb-3 flex items-start gap-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-left text-xs text-amber-200 hover:bg-amber-500/15"
         >
           <CircleAlert size={15} className="mt-0.5 shrink-0 text-amber-400" />
           <span>
-            <strong className="font-semibold">API key nao configurada</strong>
+            <strong className="font-semibold">{warningText.strong}</strong>
             <br />
-            Clique para configurar o Claude.
+            {warningText.detail}
           </span>
         </button>
       )}

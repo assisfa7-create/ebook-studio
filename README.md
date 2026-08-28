@@ -7,8 +7,13 @@ EPUB, HTML e Markdown.
 ## Requisitos
 
 - Node.js 18+
-- Uma API key do Claude (console.anthropic.com) com creditos
-  *Atencao: a assinatura Claude Pro nao inclui uso de API. A API e cobrada a parte, por uso.*
+- Provedor de IA (escolha nas Configuracoes do app):
+  * **Claude (API)**: API key com creditos de console.anthropic.com.
+    A assinatura Claude Pro nao inclui uso de API; a API e cobrada a parte, por uso.
+  * **Ollama (local)**: gratis e offline. Instale o Ollama (ollama.com), deixe-o
+    rodando (`ollama serve`) e baixe um modelo, ex.: `ollama pull qwen3:14b`.
+    Modelos locais sao bem mais lentos e imprecisos que o Claude para capitulos
+    longos, capas SVG e JSON estruturado.
 
 ## Como rodar
 
@@ -46,7 +51,7 @@ area de trabalho.
 | Telas e componentes da interface | `src/components/` |
 | Cores, fontes e visual geral | `src/styles.css` |
 | Prompts da IA (estrutura, capitulos, capa, ilustracoes) | `electron/main.js` |
-| Comunicacao com a API do Claude | `electron/claude.js` |
+| Provedores de IA (Anthropic + Ollama) | `electron/claude.js` |
 | Exportacao (PDF, EPUB, HTML, MD) | `electron/exporter.js` |
 | Ponte interface <-> sistema | `electron/preload.js` |
 

@@ -2,7 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const fsp = fs.promises
-const { Claude, extractJson, extractSvg } = require('./claude')
+const { Claude, Ollama, extractJson, extractSvg } = require('./claude')
 const exporter = require('./exporter')
 
 let win = null
@@ -19,7 +19,7 @@ async function readSettings() {
   try {
     return JSON.parse(await fsp.readFile(settingsFile(), 'utf8'))
   } catch (_) {
-    return { apiKey: '', model: 'claude-sonnet-4-5' }
+    return { provider: 'anthropic', apiKey: '', model: 'claude-sonnet-4-5', ollamaUrl: 'http://localhost:11434', ollamaModel: '' }
   }
 }
 
@@ -28,13 +28,46 @@ async function writeSettings(s) {
   await fsp.writeFile(settingsFile(), JSON.stringify(s, null, 2), 'utf8')
 }
 
-function client(key) {
-  if (!key) {
-    const err = new Error('Configure sua API key do Claude nas Configuracoes.')
+function makeClient(s) {
+  if (s.provider === 'ollama') return new Ollama(s.ollamaUrl || 'http://localhost:11434')
+  if (!s.apiKey) {
+    const err = new Error('Configure sua API key do Claude (ou troque para Ollama) nas Configuracoes.')
     err.code = 'NO_KEY'
     throw err
   }
-  return new Claude(key)
+  return new Claude(s.apiKey)
+}
+
+function modelFor(s) {
+  if (s.provider === 'ollama') {
+    if (!s.ollamaModel) {
+      const err = new Error('Selecione um modelo do Ollama nas Configuracoes.')
+      err.code = 'NO_KEY'
+      throw err
+    }
+    return s.ollamaModel
+  }
+  return s.model || 'claude-sonnet-4-5'
+}
+
+async function completeJson(c, model, { system, messages, maxTokens, temperature }) {
+  const text = await c.complete({ model, system, messages, maxTokens, temperature, jsonMode: true })
+  try {
+    return extractJson(text)
+  } catch (_) {}
+  const retry = await c.complete({
+    model,
+    system,
+    messages: [
+      ...messages,
+      { role: 'assistant', content: text },
+      { role: 'user', content: 'Sua resposta anterior nao continha JSON valido. Responda novamente com APENAS o JSON pedido, sem markdown, sem comentarios, sem texto fora do JSON.' }
+    ],
+    maxTokens,
+    temperature: 0.3,
+    jsonMode: true
+  })
+  return extractJson(retry)
 }
 
 function createWindow() {
@@ -129,20 +162,24 @@ ipcMain.handle('settings:save', async (_e, s) => {
   return { ok: true }
 })
 
-ipcMain.handle('key:check', async (_e, key) => {
+ipcMain.handle('provider:test', async (_e, cfg) => {
   try {
-    await client(key).check()
+    if (cfg.provider === 'ollama') await new Ollama(cfg.ollamaUrl).check()
+    else await new Claude(cfg.apiKey).check()
     return { ok: true }
   } catch (err) {
     return { ok: false, error: err.message }
   }
 })
 
-ipcMain.handle('models:list', async () => {
+ipcMain.handle('provider:models', async (_e, cfg) => {
   try {
+    if (cfg.provider === 'ollama') {
+      return { ok: true, data: await new Ollama(cfg.ollamaUrl).listModels() }
+    }
     const s = await readSettings()
-    const models = await client(s.apiKey).listModels()
-    return { ok: true, data: models }
+    const key = cfg.apiKey || s.apiKey
+    return { ok: true, data: await new Claude(key).listModels() }
   } catch (err) {
     return { ok: false, error: err.message }
   }
@@ -151,15 +188,14 @@ ipcMain.handle('models:list', async () => {
 ipcMain.handle('gen:outline', async (_e, args) => {
   try {
     const s = await readSettings()
-    const c = client(s.apiKey)
-    const text = await c.complete({
-      model: s.model,
+    const c = makeClient(s)
+    const data = await completeJson(c, modelFor(s), {
       system: outlineSystem(args.language),
       messages: [{ role: 'user', content: outlineUser(args) }],
       maxTokens: 4000,
       temperature: 0.7
     })
-    return { ok: true, data: extractJson(text) }
+    return { ok: true, data }
   } catch (err) {
     return { ok: false, error: err.message }
   }
@@ -169,10 +205,10 @@ ipcMain.handle('gen:chapter', async (e, args) => {
   const { reqId, project, chapterIndex } = args
   try {
     const s = await readSettings()
-    const c = client(s.apiKey)
+    const c = makeClient(s)
     const messages = chapterMessages(project, chapterIndex)
     const text = await c.complete({
-      model: s.model,
+      model: modelFor(s),
       system: chapterSystem(project),
       messages,
       maxTokens: { curto: 3000, medio: 5000, longo: 7500 }[project.chapterSize || 'medio'] || 5000,
@@ -188,10 +224,10 @@ ipcMain.handle('gen:chapter', async (e, args) => {
 ipcMain.handle('gen:blurb', async (_e, project) => {
   try {
     const s = await readSettings()
-    const c = client(s.apiKey)
+    const c = makeClient(s)
     const chapterList = (project.chapters || []).map((c2, i) => `${i + 1}. ${c2.title}: ${c2.summary || ''}`).join('\n')
     const text = await c.complete({
-      model: s.model,
+      model: modelFor(s),
       system: 'Voce e um redator publicitario especializado em livros. Responda apenas com o texto pedido, sem comentarios.',
       messages: [{
         role: 'user',
@@ -209,15 +245,13 @@ ipcMain.handle('gen:blurb', async (_e, project) => {
 ipcMain.handle('gen:cover', async (_e, args) => {
   try {
     const s = await readSettings()
-    const c = client(s.apiKey)
-    const text = await c.complete({
-      model: s.model,
+    const c = makeClient(s)
+    const data = await completeJson(c, modelFor(s), {
       system: coverSystem(),
       messages: [{ role: 'user', content: coverUser(args) }],
       maxTokens: 8000,
       temperature: 0.85
     })
-    const data = extractJson(text)
     const svg = extractSvg(typeof data.svg === 'string' ? data.svg : '')
     if (!data.palette) data.palette = []
     data.svg = svg
@@ -360,12 +394,11 @@ Gere um SVG (0 0 1600 2560) memoravel e profissional.`
 ipcMain.handle('gen:illustration', async (_e, { project, chapterIndex, hint }) => {
   try {
     const s = await readSettings()
-    const c = client(s.apiKey)
+    const c = makeClient(s)
     const ch = project.chapters[chapterIndex]
     const excerpt = (ch.content || '').slice(0, 2500)
     const palette = project.cover && project.cover.palette ? project.cover.palette.join(', ') : ''
-    const text = await c.complete({
-      model: s.model,
+    const data = await completeJson(c, modelFor(s), {
       system: `Voce e um ilustrador editorial. Cria ilustracoes vetoriais SVG limpas e modernas para e-books.
 Retorne SOMENTE JSON: { "caption": "legenda curta em ${project.language}", "svg": "<svg ...>...</svg>" }
 
@@ -373,8 +406,8 @@ Regras do SVG:
 - viewBox="0 0 1200 800", sem atributos width/height fixos.
 - Apenas formas vetoriais (rect, circle, path, ellipse, polygon, gradients). SEM <text> e sem imagens externas.
 - Estilo flat/minimalista premium, coeso com a identidade visual do livro.
-- Escape & como &amp; dentro do SVG.`
-      ,messages: [{
+- Escape & como &amp; dentro do SVG.`,
+      messages: [{
         role: 'user',
         content: `Ilustracao para o capitulo "${ch.title}" do e-book "${project.title}".
 Resumo do capitulo: ${ch.summary || '-'}
@@ -389,7 +422,6 @@ Crie uma ilustracao que represente o conceito central do capitulo.`
       maxTokens: 6000,
       temperature: 0.8
     })
-    const data = extractJson(text)
     const svg = extractSvg(typeof data.svg === 'string' ? data.svg : '')
     return { ok: true, data: { id: 'img' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), svg, caption: (data.caption || '').slice(0, 140) } }
   } catch (err) {
