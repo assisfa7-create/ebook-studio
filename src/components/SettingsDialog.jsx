@@ -221,7 +221,7 @@ export default function SettingsDialog({ settings, onClose, onSaved, toast }) {
         <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4">
           <div className="mb-3 flex items-center justify-between">
             <span className="text-xs font-semibold tracking-widest text-zinc-500 uppercase">Atualizacoes</span>
-            <span className="text-[11px] text-zinc-500">Versao {appVersion}</span>
+            <span className="text-[11px] text-zinc-500">Helal Builder · v{appVersion}</span>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -239,7 +239,7 @@ export default function SettingsDialog({ settings, onClose, onSaved, toast }) {
               <RefreshCw size={13} />
               Verificar atualizacoes
             </button>
-            {updateStatus.status === 'downloaded' && (
+            {updateStatus?.status === 'downloaded' && (
               <button className="btn-primary px-3 py-1.5 text-xs" onClick={() => window.api.installUpdate()}>
                 <Rocket size={13} />
                 Reiniciar e atualizar

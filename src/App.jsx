@@ -6,6 +6,7 @@ import Wizard from './components/Wizard'
 import SettingsDialog from './components/SettingsDialog'
 import ExportDialog from './components/ExportDialog'
 import Toasts from './components/Toasts'
+import UpdatePopup from './components/UpdatePopup'
 
 export default function App() {
   const [projects, setProjects] = useState([])
@@ -109,6 +110,7 @@ export default function App() {
       )}
 
       <Toasts toasts={toasts} />
+      <UpdatePopup />
     </div>
   )
 }

@@ -120,10 +120,10 @@ function setupAutoUpdater() {
   autoUpdater.autoInstallOnAppQuit = true
   const send = status => { if (win && !win.isDestroyed()) win.webContents.send('update:status', status) }
   autoUpdater.on('checking-for-update', () => send({ status: 'checking' }))
-  autoUpdater.on('update-available', () => send({ status: 'available' }))
+  autoUpdater.on('update-available', e => send({ status: 'available', version: e && e.version }))
   autoUpdater.on('update-not-available', () => send({ status: 'up-to-date' }))
   autoUpdater.on('download-progress', p => send({ status: 'downloading', percent: Math.round(p.percent) }))
-  autoUpdater.on('update-downloaded', () => send({ status: 'downloaded' }))
+  autoUpdater.on('update-downloaded', e => send({ status: 'downloaded', version: e && e.version }))
   autoUpdater.on('error', e => send({ status: 'error', message: e ? e.message : 'erro' }))
   autoUpdater.checkForUpdates().catch(() => {})
 }

@@ -1,7 +1,9 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { BookOpen, Settings, Plus, BookMarked, CircleAlert } from 'lucide-react'
 
 export default function Sidebar({ projects, project, settings, onSelect, onNew, onSettings, onGoHome }) {
+  const [version, setVersion] = useState('')
+  useEffect(() => { window.api.getAppVersion().then(setVersion) }, [])
   const iaReady = settings && (settings.provider === 'ollama' ? settings.ollamaModel : settings.apiKey)
   const warningText =
     settings?.provider === 'ollama'
@@ -70,6 +72,10 @@ export default function Sidebar({ projects, project, settings, onSelect, onNew, 
           <Settings size={15} />
           Configuracoes
         </button>
+        <div className="mt-1.5 px-2 text-[10px] text-zinc-600">
+          Criado por <span className="font-semibold text-zinc-500">Helal Builder</span>
+          {version && <span className="text-zinc-700"> · v{version}</span>}
+        </div>
       </div>
     </aside>
   )
