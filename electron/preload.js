@@ -18,6 +18,14 @@ contextBridge.exposeInMainWorld('api', {
   illustration: (project, chapterIndex, hint) =>
     ipcRenderer.invoke('gen:illustration', { project, chapterIndex, hint }),
   export: (fmt, project) => ipcRenderer.invoke('export:book', { fmt, project }),
+  getAppVersion: () => ipcRenderer.invoke('app:version'),
+  checkUpdate: () => ipcRenderer.invoke('update:check'),
+  installUpdate: () => ipcRenderer.invoke('update:install'),
+  onUpdateStatus: cb => {
+    const handler = (_e, data) => cb(data)
+    ipcRenderer.on('update:status', handler)
+    return () => ipcRenderer.removeListener('update:status', handler)
+  },
   onStream: (reqId, cb) => {
     const channel = 'stream:' + reqId
     const handler = (_e, data) => cb(data)

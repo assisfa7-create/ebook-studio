@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const fsp = fs.promises
+const { autoUpdater } = require('electron-updater')
 const { Claude, Ollama, extractJson, extractSvg } = require('./claude')
 const exporter = require('./exporter')
 
@@ -89,8 +90,41 @@ function createWindow() {
   win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'))
 }
 
-app.whenReady().then(createWindow)
+app.whenReady().then(() => {
+  createWindow()
+  setupAutoUpdater()
+})
 app.on('window-all-closed', () => app.quit())
+
+function setupAutoUpdater() {
+  if (!app.isPackaged) return
+  autoUpdater.autoDownload = true
+  autoUpdater.autoInstallOnAppQuit = true
+  const send = status => { if (win && !win.isDestroyed()) win.webContents.send('update:status', status) }
+  autoUpdater.on('checking-for-update', () => send({ status: 'checking' }))
+  autoUpdater.on('update-available', () => send({ status: 'available' }))
+  autoUpdater.on('update-not-available', () => send({ status: 'up-to-date' }))
+  autoUpdater.on('download-progress', p => send({ status: 'downloading', percent: Math.round(p.percent) }))
+  autoUpdater.on('update-downloaded', () => send({ status: 'downloaded' }))
+  autoUpdater.on('error', e => send({ status: 'error', message: e ? e.message : 'erro' }))
+  autoUpdater.checkForUpdates().catch(() => {})
+}
+
+ipcMain.handle('app:version', () => app.getVersion())
+
+ipcMain.handle('update:check', async () => {
+  if (!app.isPackaged) return { ok: false, error: 'Disponivel apenas no app instalado.' }
+  try {
+    await autoUpdater.checkForUpdates()
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err.message }
+  }
+})
+
+ipcMain.handle('update:install', () => {
+  autoUpdater.quitAndInstall()
+})
 
 ipcMain.handle('projects:list', async () => {
   await ensureDirs()

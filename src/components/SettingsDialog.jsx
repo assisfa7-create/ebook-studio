@@ -1,6 +1,15 @@
 import React, { useEffect, useState } from 'react'
-import { Loader2, Eye, EyeOff, CheckCircle2, XCircle, Cloud, HardDrive } from 'lucide-react'
+import { Loader2, Eye, EyeOff, CheckCircle2, XCircle, Cloud, HardDrive, RefreshCw, Rocket } from 'lucide-react'
 import { Overlay } from './Toasts'
+
+const STATUS_TEXT = {
+  checking: 'Verificando atualizacoes...',
+  available: 'Nova versao disponivel. Baixando...',
+  'up-to-date': 'Voce ja esta na versao mais recente.',
+  downloading: 'Baixando atualizacao...',
+  downloaded: 'Atualizacao baixada! Reinicie para aplicar.',
+  error: 'Nao foi possivel verificar atualizacoes agora.'
+}
 
 const FALLBACK_MODELS = [
   { id: 'claude-sonnet-4-5', name: 'Claude Sonnet 4.5' },
@@ -21,6 +30,15 @@ export default function SettingsDialog({ settings, onClose, onSaved }) {
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [appVersion, setAppVersion] = useState('')
+  const [updateStatus, setUpdateStatus] = useState(null)
+  const [updateError, setUpdateError] = useState(null)
+
+  useEffect(() => {
+    window.api.getAppVersion().then(setAppVersion)
+    const off = window.api.onUpdateStatus(setUpdateStatus)
+    return off
+  }, [])
 
   function loadModels(cfg) {
     setLoadingModels(true)
@@ -198,6 +216,46 @@ export default function SettingsDialog({ settings, onClose, onSaved }) {
             {saving && <Loader2 size={15} className="animate-spin" />}
             Salvar
           </button>
+        </div>
+
+        <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-xs font-semibold tracking-widest text-zinc-500 uppercase">Atualizacoes</span>
+            <span className="text-[11px] text-zinc-500">Versao {appVersion}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              className="btn-outline px-3 py-1.5 text-xs"
+              onClick={async () => {
+                setUpdateStatus({ status: 'checking' })
+                setUpdateError(null)
+                const res = await window.api.checkUpdate()
+                if (!res.ok) {
+                  setUpdateStatus({ status: 'error' })
+                  setUpdateError(res.error)
+                }
+              }}
+            >
+              <RefreshCw size={13} />
+              Verificar atualizacoes
+            </button>
+            {updateStatus.status === 'downloaded' && (
+              <button className="btn-primary px-3 py-1.5 text-xs" onClick={() => window.api.installUpdate()}>
+                <Rocket size={13} />
+                Reiniciar e atualizar
+              </button>
+            )}
+          </div>
+          {updateStatus && (
+            <p className={`mt-2.5 text-xs ${updateStatus.status === 'error' ? 'text-red-400' : updateStatus.status === 'downloaded' ? 'text-emerald-400' : 'text-zinc-500'}`}>
+              {STATUS_TEXT[updateStatus.status]}
+              {updateStatus.percent != null ? ` ${updateStatus.percent}%` : ''}
+              {updateError ? ` (${updateError})` : ''}
+            </p>
+          )}
+          <p className="mt-2 text-[11px] text-zinc-600">
+            O app verifica novidades ao abrir. Seus e-books nunca sao afetados por atualizacoes.
+          </p>
         </div>
       </div>
     </Overlay>
